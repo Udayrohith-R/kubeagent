@@ -1,0 +1,16 @@
+receivers:
+  - name: kubeagent-webhook
+    webhook_configs:
+      - url: http://kubeagent.monitoring.svc.cluster.local:8080/webhook
+        send_resolved: false
+
+route:
+  receiver: kubeagent-webhook
+  group_by: [alertname, namespace, pod]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - alertname =~ "KubePodCrashLooping|KubePodNotReady|HighLatency"
+      receiver: kubeagent-webhook

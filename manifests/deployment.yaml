@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubeagent
+  namespace: monitoring
+  labels:
+    app: kubeagent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubeagent
+  template:
+    metadata:
+      labels:
+        app: kubeagent
+    spec:
+      serviceAccountName: kubeagent
+      containers:
+        - name: kubeagent
+          image: ghcr.io/Udayrohith-R/kubeagent:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: WEBHOOK_PORT
+              value: "8080"
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kubeagent-secrets
+                  key: slack-bot-token
+            - name: SLACK_CHANNEL_ID
+              valueFrom:
+                secretKeyRef:
+                  name: kubeagent-secrets
+                  key: slack-channel-id
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kubeagent-secrets
+                  key: anthropic-api-key
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeagent
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeagent-readonly
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeagent-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeagent-readonly
+subjects:
+  - kind: ServiceAccount
+    name: kubeagent
+    namespace: monitoring
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubeagent
+  namespace: monitoring
+spec:
+  selector:
+    app: kubeagent
+  ports:
+    - port: 8080
+      targetPort: 8080
